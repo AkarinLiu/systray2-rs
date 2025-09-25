@@ -1,28 +1,28 @@
 [package]
-name = "systray"
-version = "0.4.0"
-authors = ["Kyle Machulis <kyle@machul.is>"]
-description = "Rust library for making minimal cross-platform systray GUIs"
+name = "systray2"
+version = "0.4.1"
+authors = ["AkarinLiu <akarinliu@outlook.com>"]
+description = "An Systray Library fork"
 license = "BSD-3-Clause"
-homepage = "http://github.com/qdot/systray-rs"
-repository = "https://github.com/qdot/systray-rs.git"
+homepage = "http://github.com/AkarinLiu/systray2-rs"
+repository = "https://github.com/AkarinLiu/systray2-rs.git"
 readme = "README.md"
 keywords = ["gui"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
-log= "0.4.8"
+log= "*"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-winapi= { version = "0.3.8", features = ["shellapi", "libloaderapi", "errhandlingapi", "impl-default"] }
-libc= "0.2.66"
+winapi= { version = "*", features = ["shellapi", "libloaderapi", "errhandlingapi", "impl-default"] }
+libc= "*"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-gtk= "0.8.1"
-glib= "0.9.3"
-libappindicator= "0.5.1"
+gtk= "*"
+glib= "*"
+libappindicator= "*"
 
-# [target.'cfg(target_os = "macos")'.dependencies]
-# objc="*"
-# cocoa="*"
-# core-foundation="*"
+[target.'cfg(target_os = "macos")'.dependencies]
+objc="*"
+cocoa="*"
+core-foundation="*"

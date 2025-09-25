@@ -43,7 +43,7 @@ impl fmt::Display for Error {
 }
 
 pub struct Application {
-    window: api::api::Window,
+    window: api::platform::Window,
     menu_idx: u32,
     callback: HashMap<u32, Callback>,
     // Each platform-specific window module will set up its own thread for
@@ -53,7 +53,7 @@ pub struct Application {
 }
 
 type Callback =
-    Box<(dyn FnMut(&mut Application) -> Result<(), BoxedError> + Send + Sync + 'static)>;
+    Box<dyn FnMut(&mut Application) -> Result<(), BoxedError> + Send + Sync + 'static>;
 
 fn make_callback<F, E>(mut f: F) -> Callback
 where
@@ -69,7 +69,7 @@ where
 impl Application {
     pub fn new() -> Result<Application, Error> {
         let (event_tx, event_rx) = channel();
-        match api::api::Window::new(event_tx) {
+        match api::platform::Window::new(event_tx) {
             Ok(w) => Ok(Application {
                 window: w,
                 menu_idx: 0,
@@ -86,9 +86,7 @@ impl Application {
         E: error::Error + Send + Sync + 'static,
     {
         let idx = self.menu_idx;
-        if let Err(e) = self.window.add_menu_entry(idx, item_name) {
-            return Err(e);
-        }
+        self.window.add_menu_entry(idx, item_name)?;
         self.callback.insert(idx, make_callback(f));
         self.menu_idx += 1;
         Ok(idx)
@@ -96,9 +94,7 @@ impl Application {
 
     pub fn add_menu_separator(&mut self) -> Result<u32, Error> {
         let idx = self.menu_idx;
-        if let Err(e) = self.window.add_menu_separator(idx) {
-            return Err(e);
-        }
+        self.window.add_menu_separator(idx)?;
         self.menu_idx += 1;
         Ok(idx)
     }
@@ -135,14 +131,14 @@ impl Application {
 
     pub fn wait_for_message(&mut self) -> Result<(), Error> {
         loop {
-            let msg;
-            match self.rx.recv() {
-                Ok(m) => msg = m,
+            
+            let msg = match self.rx.recv() {
+                Ok(m) => m,
                 Err(_) => {
                     self.quit();
                     break;
                 }
-            }
+            };
             if self.callback.contains_key(&msg.menu_index) {
                 if let Some(mut f) = self.callback.remove(&msg.menu_index) {
                     f(self)?;

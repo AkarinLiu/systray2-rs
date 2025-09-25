@@ -30,12 +30,12 @@ use winapi::{
 
 // Got this idea from glutin. Yay open source! Boo stupid winproc! Even more boo
 // doing SetLongPtr tho.
-thread_local!(static WININFO_STASH: RefCell<Option<WindowsLoopData>> = RefCell::new(None));
+thread_local!(static WININFO_STASH: RefCell<Option<WindowsLoopData>> = const { RefCell::new(None) });
 
 fn to_wstring(str: &str) -> Vec<u16> {
     OsStr::new(str)
         .encode_wide()
-        .chain(Some(0).into_iter())
+        .chain(Some(0))
         .collect::<Vec<_>>()
 }
 
@@ -83,8 +83,8 @@ unsafe extern "system" fn window_proc(
         });
     }
 
-    if msg == WM_USER + 1 {
-        if l_param as UINT == winuser::WM_LBUTTONUP || l_param as UINT == winuser::WM_RBUTTONUP {
+    if msg == WM_USER + 1
+        && (l_param as UINT == winuser::WM_LBUTTONUP || l_param as UINT == winuser::WM_RBUTTONUP) {
             let mut p = POINT { x: 0, y: 0 };
             if winuser::GetCursorPos(&mut p as *mut POINT) == 0 {
                 return 1;
@@ -106,11 +106,10 @@ unsafe extern "system" fn window_proc(
                 }
             });
         }
-    }
     if msg == winuser::WM_DESTROY {
         winuser::PostQuitMessage(0);
     }
-    return winuser::DefWindowProcW(h_wnd, msg, w_param, l_param);
+    winuser::DefWindowProcW(h_wnd, msg, w_param, l_param)
 }
 
 fn get_nid_struct(hwnd: &HWND) -> NOTIFYICONDATAW {
@@ -121,12 +120,12 @@ fn get_nid_struct(hwnd: &HWND) -> NOTIFYICONDATAW {
         uFlags: 0 as UINT,
         uCallbackMessage: 0 as UINT,
         hIcon: 0 as HICON,
-        szTip: [0 as u16; 128],
+        szTip: [0_u16; 128],
         dwState: 0 as DWORD,
         dwStateMask: 0 as DWORD,
-        szInfo: [0 as u16; 256],
+        szInfo: [0_u16; 256],
         u: Default::default(),
-        szInfoTitle: [0 as u16; 64],
+        szInfoTitle: [0_u16; 64],
         dwInfoFlags: 0 as UINT,
         guidItem: GUID {
             Data1: 0 as c_ulong,
@@ -150,7 +149,7 @@ fn get_menu_item_struct() -> MENUITEMINFOW {
         hbmpUnchecked: 0 as HBITMAP,
         dwItemData: 0 as ULONG_PTR,
         dwTypeData: std::ptr::null_mut(),
-        cch: 0 as u32,
+        cch: 0_u32,
         hbmpItem: 0 as HBITMAP,
     }
 }
@@ -187,7 +186,7 @@ unsafe fn init_window() -> Result<WindowInfo, Error> {
         0 as HINSTANCE,
         std::ptr::null_mut(),
     );
-    if hwnd == std::ptr::null_mut() {
+    if hwnd.is_null() {
         return Err(get_win_os_error("Error creating window"));
     }
     let mut nid = get_nid_struct(&hwnd);
@@ -213,9 +212,9 @@ unsafe fn init_window() -> Result<WindowInfo, Error> {
     }
 
     Ok(WindowInfo {
-        hwnd: hwnd,
-        hmenu: hmenu,
-        hinstance: hinstance,
+        hwnd,
+        hmenu,
+        hinstance,
     })
 }
 
@@ -235,8 +234,8 @@ unsafe fn run_loop() {
         if msg.message == winuser::WM_QUIT {
             break;
         }
-        winuser::TranslateMessage(&mut msg);
-        winuser::DispatchMessageW(&mut msg);
+        winuser::TranslateMessage(&msg);
+        winuser::DispatchMessageW(&msg);
     }
     log::debug!("Leaving windows run loop");
 }
@@ -251,12 +250,10 @@ impl Window {
         let (tx, rx) = channel();
         let windows_loop = thread::spawn(move || {
             unsafe {
-                let i = init_window();
-                let k;
-                match i {
+                let k = match init_window() {
                     Ok(j) => {
                         tx.send(Ok(j.clone())).ok();
-                        k = j;
+                        j
                     }
                     Err(e) => {
                         // If creation didn't work, return out of the thread.
@@ -281,7 +278,7 @@ impl Window {
             }
         };
         let w = Window {
-            info: info,
+            info,
             windows_loop: Some(windows_loop),
         };
         Ok(w)
@@ -301,10 +298,10 @@ impl Window {
         log::debug!("Setting tooltip to {}", tooltip);
         // Gross way to convert String to [i8; 128]
         // TODO: Clean up conversion, test for length so we don't panic at runtime
-        let tt = tooltip.as_bytes().clone();
+        let tt = tooltip.as_bytes();
         let mut nid = get_nid_struct(&self.info.hwnd);
-        for i in 0..tt.len() {
-            nid.szTip[i] = tt[i] as u16;
+        for (i, &byte) in tt.iter().enumerate() {
+            nid.szTip[i] = byte as u16;
         }
         nid.uFlags = NIF_TIP;
         unsafe {
@@ -365,13 +362,13 @@ impl Window {
         unsafe {
             icon = winuser::LoadImageW(
                 self.info.hinstance,
-                to_wstring(&resource_name).as_ptr(),
+                to_wstring(resource_name).as_ptr(),
                 IMAGE_ICON,
                 64,
                 64,
                 0,
             ) as HICON;
-            if icon == std::ptr::null_mut() as HICON {
+            if std::ptr::eq(icon, std::ptr::null_mut()) {
                 return Err(get_win_os_error("Error setting icon from resource"));
             }
         }
@@ -379,7 +376,7 @@ impl Window {
     }
 
     pub fn set_icon_from_file(&self, icon_file: &str) -> Result<(), Error> {
-        let wstr_icon_file = to_wstring(&icon_file);
+        let wstr_icon_file = to_wstring(icon_file);
         let hicon;
         unsafe {
             hicon = winuser::LoadImageW(
@@ -390,7 +387,7 @@ impl Window {
                 64,
                 LR_LOADFROMFILE,
             ) as HICON;
-            if hicon == std::ptr::null_mut() as HICON {
+            if std::ptr::eq(hicon, std::ptr::null_mut()) {
                 return Err(get_win_os_error("Error setting icon from file"));
             }
         }
@@ -427,7 +424,7 @@ impl Window {
                 )
             };
 
-            if hicon == std::ptr::null_mut() as HICON {
+            if std::ptr::eq(hicon, std::ptr::null_mut()) {
                 return Err(unsafe { get_win_os_error("Cannot load icon from the buffer") });
             }
 
